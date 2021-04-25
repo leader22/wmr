@@ -14,14 +14,12 @@ export default function aliasesPlugin({ aliases, cwd }) {
 	return {
 		name: 'aliases',
 		async resolveId(id, importer) {
-			console.log('=========', JSON.stringify(id));
 			if (typeof id !== 'string' || id.startsWith('\0')) {
 				return;
 			}
 
 			let aliased = null;
 
-			console.log('==> ALIAS', id, importer);
 			if (/^\.\.?\//.test(id)) {
 				// TODO: Do we need to support this?
 				if (!importer) return;
@@ -48,7 +46,6 @@ export default function aliasesPlugin({ aliases, cwd }) {
 					// Fall back to a partial match if any
 					if (!path.isAbsolute(id) && !path.relative(i, id).startsWith('..')) {
 						partial = aliases[i] + id.substring(i.length);
-						console.log('PARTIAL', id, '->', partial);
 						break;
 					}
 				}
@@ -60,15 +57,12 @@ export default function aliasesPlugin({ aliases, cwd }) {
 
 			// We had no exact match, use partial one
 
-			console.log('>>   aliased', aliased);
 			if (aliased == null || aliased === id) {
-				console.log('bail', aliased, id);
 				return;
 			}
 			// now allow other resolvers to handle the aliased version
 			// (this is important since they may mark as external!)
 			const resolved = await this.resolve(aliased, importer, { skipSelf: true });
-			console.log('RRR  aliased resolve', resolved);
 			log(formatResolved(id, resolved));
 			return resolved;
 		}

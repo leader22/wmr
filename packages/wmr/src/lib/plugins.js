@@ -76,7 +76,7 @@ export function getPlugins(options) {
 		...plugins.slice(split),
 
 		// Apply default loaders to unprefixed paths
-		defaultLoaders(),
+		defaultLoaders({ cwd }),
 
 		production && optimizeGraphPlugin({ publicPath }),
 		minify && minifyCssPlugin({ sourcemap }),

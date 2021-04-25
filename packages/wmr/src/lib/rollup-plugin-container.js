@@ -6,7 +6,6 @@ import * as kl from 'kolorist';
 import acornClassFields from 'acorn-class-fields';
 import { debug, formatResolved, formatPath } from './output-utils.js';
 import { serializeSpecifier } from '../plugins/plugin-utils.js';
-import { resolveCachePath } from '../wmr-middleware.js';
 
 // Rollup respects "module", Node 14 doesn't.
 const cjsDefault = m => ('default' in m ? m.default : m);
@@ -66,7 +65,7 @@ export function createPluginContainer(plugins, opts) {
 			fileName = fileName.replace('[name]', posix.basename(posixName).replace(/\.[a-z0-9]+$/g, ''));
 		}
 		const out = resolve(opts.cwd || '.', ctx.outputOptions.dir || '.');
-		return resolveCachePath(out, fileName);
+		return resolve(out, fileName);
 	}
 
 	// counter for generating unique emitted asset IDs
@@ -291,7 +290,6 @@ export function createPluginContainer(plugins, opts) {
 		 * @returns {Promise<import('rollup').LoadResult>}
 		 */
 		async load(id) {
-			console.log('LOAD', id);
 			for (plugin of plugins) {
 				if (!plugin.load) continue;
 				const result = await plugin.load.call(ctx, id);
@@ -309,7 +307,7 @@ export function createPluginContainer(plugins, opts) {
 			const file = files.get(referenceId);
 			if (file == null) return null;
 			const out = resolve(opts.cwd || '.', ctx.outputOptions.dir || '.');
-			const cachePath = resolveCachePath(out, file.filename);
+			const cachePath = resolve(out, file.filename);
 			const fileName = relative(out, cachePath);
 
 			const assetInfo = {
