@@ -33,11 +33,6 @@ declare module 'wmr' {
 		public: string;
 		publicPath: string;
 		host: string;
-		/**
-		 * List of directories from which it is allowed to server files
-		 * from (default: [cwd] and [cwd]/src if present)
-		 */
-		includeDirs: string[];
 		port: number;
 		root: string;
 		out: string;

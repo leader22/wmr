@@ -48,7 +48,7 @@ function identifierPair(id, importer) {
 
 /**
  * @param {Plugin[]} plugins
- * @param {import('rollup').InputOptions & PluginContainerOptions & { includeDirs: string[], cwd: string }} opts
+ * @param {import('rollup').InputOptions & PluginContainerOptions & { cwd: string, aliases: Record<string, string> }} opts
  */
 export function createPluginContainer(plugins, opts) {
 	if (!Array.isArray(plugins)) plugins = [plugins];
@@ -291,6 +291,7 @@ export function createPluginContainer(plugins, opts) {
 		 * @returns {Promise<import('rollup').LoadResult>}
 		 */
 		async load(id) {
+			console.log('LOAD', id);
 			for (plugin of plugins) {
 				if (!plugin.load) continue;
 				const result = await plugin.load.call(ctx, id);
@@ -327,7 +328,7 @@ export function createPluginContainer(plugins, opts) {
 			}
 
 			const absolute = resolve(opts.cwd, file.filename);
-			let resolved = serializeSpecifier(absolute, opts.cwd, opts.includeDirs, { forceAbsolute: true });
+			let resolved = serializeSpecifier(absolute, opts.cwd, opts.aliases, { forceAbsolute: true });
 
 			// Assets may include the `.cache` folder in the path which
 			// should not be public for the client

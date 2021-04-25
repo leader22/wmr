@@ -149,7 +149,7 @@ describe('fixtures', () => {
 		});
 
 		// eslint-disable-next-line jest/expect-expect
-		it('should only load CSS from include directories', async () => {
+		it.only('should only load CSS from include directories', async () => {
 			await loadFixture('resolve-include-dir2', env);
 			instance = await runWmrFast(env.tmp.path);
 			await env.page.goto(await instance.address);

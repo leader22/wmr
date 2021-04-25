@@ -10,8 +10,9 @@ import sassPlugin from './plugins/sass-plugin.js';
 import { getMimeType } from './lib/mimetypes.js';
 import { debug, formatPath } from './lib/output-utils.js';
 import { getPlugins } from './lib/plugins.js';
-import { deserializeSpecifier, fileExists, resolveFile, serializeSpecifier } from './plugins/plugin-utils.js';
+import { fileExists, resolveFile, serializeSpecifier } from './plugins/plugin-utils.js';
 import { watch } from './lib/fs-watcher.js';
+import aliasesPlugin from './plugins/aliases-plugin.js';
 
 const NOOP = () => {};
 
@@ -30,14 +31,14 @@ export const moduleGraph = new Map();
  * @returns {import('polka').Middleware}
  */
 export default function wmrMiddleware(options) {
-	let { cwd, root, out, distDir = 'dist', onError, onChange = NOOP, includeDirs } = options;
+	let { cwd, root, out, distDir = 'dist', onError, onChange = NOOP } = options;
 
 	distDir = resolve(dirname(out), distDir);
 
 	const NonRollup = createPluginContainer(getPlugins(options), {
 		cwd,
-		includeDirs,
 		writeFile: (filename, source) => writeCacheFile(out, filename, source),
+		aliases: options.aliases,
 		output: {
 			// assetFileNames: '@asset/[name][extname]',
 			// chunkFileNames: '[name][extname]',
@@ -48,7 +49,8 @@ export default function wmrMiddleware(options) {
 
 	NonRollup.buildStart();
 
-	const watcher = watch([...includeDirs, resolve(root, 'package.json')], {
+	// TODO: watch aliases
+	const watcher = watch([resolve(root, 'package.json')], {
 		cwd,
 		disableGlobbing: true,
 		ignored: [/(^|[/\\])(node_modules|\.git|\.DS_Store)([/\\]|$)/, resolve(cwd, out), resolve(cwd, distDir)]
@@ -107,7 +109,7 @@ export default function wmrMiddleware(options) {
 
 		if (/\.(css|s[ac]ss)$/.test(filename)) {
 			WRITE_CACHE.delete(filename);
-			const url = serializeSpecifier(filename, cwd, includeDirs);
+			const url = serializeSpecifier(filename, cwd, options.aliases);
 			pendingChanges.add(url);
 		} else if (/\.(mjs|[tj]sx?)$/.test(filename)) {
 			if (!moduleGraph.has(filename)) {
@@ -140,17 +142,12 @@ export default function wmrMiddleware(options) {
 			return next();
 		}
 
-		// Paths leading outside of cwd ar encoded via the `/@path` prefix.
-		// Just before loading the files we check if we are actually allowed
-		// to load a file outside cwd. It's only allowed if the resolved file
-		// is in one of `options.includeDir`
-		path = deserializeSpecifier(path);
 		if (path.startsWith('.')) path = '/' + path;
 
 		let prefix = '';
 		const prefixMatches = path.match(/^\/?@([a-z-]+)(\/.+)$/);
 		if (prefixMatches) {
-			prefix = '\0' + prefixMatches[1] + ':';
+			prefix = '@' + prefixMatches[1] + ':';
 			path = prefixMatches[2];
 		}
 
@@ -158,6 +155,10 @@ export default function wmrMiddleware(options) {
 		const osPath = path.slice(1).split(posix.sep).join(sep);
 
 		let id = osPath.replace(/^\.\//, '').replace(/^[\0]/, '').split(sep).join(posix.sep);
+
+		const resolved = await NonRollup.resolveId(id);
+		let resolvedId = typeof resolved == 'object' ? resolved && resolved.id : resolved;
+		console.log('>>>>>>>> resolved', JSON.stringify(resolvedId));
 
 		// add back any prefix if there was one:
 		let file = prefix + osPath;
@@ -170,7 +171,7 @@ export default function wmrMiddleware(options) {
 
 		log(`${kl.cyan(formatPath(path))} -> ${kl.dim(id)} file: ${kl.dim(file)}`);
 
-		const ctx = { req, res, id, file, path, prefix, cwd, out, NonRollup, next, includeDirs };
+		const ctx = { req, res, id, file, path, prefix, cwd, out, NonRollup, next, aliases: options.aliases };
 
 		let transform;
 		if (path === '/_wmr.js') {
@@ -231,7 +232,7 @@ export default function wmrMiddleware(options) {
  * @property {string} path request path
  * @property {string} prefix a Rollup plugin -style path `\0prefix:`, if the URL was `/＠prefix/*`
  * @property {string} cwd working directory, including ./public if detected
- * @property {string[]} includeDirs List of directories to we are allowed to include files from
+ * @property {Record<string, string>} aliases
  * @property {string} out output directory
  * @property {InstanceType<import('http')['IncomingMessage']>} req HTTP Request object
  * @property {InstanceType<import('http')['ServerResponse']>} res HTTP Response object
@@ -244,8 +245,8 @@ const logJsTransform = debug('wmr:transform.js');
 /** @type {{ [key: string]: (ctx: Context) => Result|Promise<Result> }} */
 export const TRANSFORMS = {
 	// Handle direct asset requests (/foo?asset)
-	async asset({ file, cwd, req, res, includeDirs }) {
-		const filename = resolveFile(file, cwd, includeDirs);
+	async asset({ file, cwd, req, res, aliases }) {
+		const filename = resolveFile(file, cwd, aliases);
 		let stats;
 		try {
 			stats = await fs.stat(filename);
@@ -275,7 +276,8 @@ export const TRANSFORMS = {
 	},
 
 	// Handle individual JavaScript modules
-	async js({ id, file, prefix, res, cwd, out, NonRollup, req, includeDirs }) {
+	async js({ id, file, prefix, res, cwd, out, NonRollup, req, aliases }) {
+		console.log('transform jsssss');
 		let code;
 		try {
 			res.setHeader('Content-Type', 'application/javascript;charset=utf-8');
@@ -286,6 +288,7 @@ export const TRANSFORMS = {
 				return WRITE_CACHE.get(id);
 			}
 
+			console.log('Transform js resolve', JSON.stringify(id));
 			const resolved = await NonRollup.resolveId(id);
 			let resolvedId = typeof resolved == 'object' ? resolved && resolved.id : resolved;
 
@@ -297,7 +300,7 @@ export const TRANSFORMS = {
 
 				if (lastPrefix === 0) {
 					let importer = resolvedId.slice(lastPrefix);
-					file = resolveFile(importer, cwd, includeDirs);
+					file = resolveFile(importer, cwd, aliases);
 					loadId = resolvedId.slice(0, lastPrefix) + file;
 				}
 
@@ -314,13 +317,14 @@ export const TRANSFORMS = {
 
 				// Ensure that the file path resolves to a file
 				// that we're actually allowed to load.
-				file = resolveFile(file, cwd, includeDirs);
+				file = resolveFile(file, cwd, aliases);
 				logJsTransform(`load file: ${kl.cyan(file)} [fallback]`);
 				code = await fs.readFile(file, 'utf-8');
 			}
 
 			code = await NonRollup.transform(code, id);
 
+			console.log('ttt transform', id);
 			code = await transformImports(code, id, {
 				resolveImportMeta(property) {
 					return NonRollup.resolveImportMeta(property);
@@ -341,6 +345,7 @@ export const TRANSFORMS = {
 					// const resolved = await NonRollup.resolveId(spec, importer);
 					let originalSpec = spec;
 					const resolved = await NonRollup.resolveId(spec, file);
+					console.log('TRANSFORM resolved', spec, '->', resolved);
 					if (resolved) {
 						spec = typeof resolved == 'object' ? resolved.id : resolved;
 						if (/^(\/|\\|[a-z]:\\)/i.test(spec)) {
@@ -373,6 +378,7 @@ export const TRANSFORMS = {
 					// foo.css --> foo.css.js (import of CSS Modules proxy module)
 					if (spec.match(/\.(css|s[ac]ss)$/)) spec += '.js';
 
+					console.log('SPEC', originalSpec, spec);
 					// Bare specifiers are npm packages:
 					if (!/^\0?\.?\.?[/\\]/.test(spec)) {
 						const meta = normalizeSpecifier(spec);
@@ -408,7 +414,7 @@ export const TRANSFORMS = {
 					// Serialize path if it has no serialized prefix because it
 					// may resolve outside of cwd
 					if (!spec.startsWith('/@')) {
-						return serializeSpecifier(spec, cwd, includeDirs, importer);
+						return serializeSpecifier(spec, cwd, aliases, importer);
 					}
 
 					return spec;
@@ -427,23 +433,28 @@ export const TRANSFORMS = {
 		}
 	},
 	// Handles "CSS Modules" proxy modules (style.module.css.js)
-	async cssModule({ id, file, cwd, out, res, includeDirs }) {
+	async cssModule({ id, file, cwd, out, res, aliases, NonRollup }) {
 		res.setHeader('Content-Type', 'application/javascript;charset=utf-8');
 
 		// Cache the generated mapping/proxy module with a .js extension (the CSS itself is also cached)
 		if (WRITE_CACHE.has(id)) return WRITE_CACHE.get(id);
 
-		file = file.replace(/\.js$/, '');
+		const resolved = await NonRollup.resolveId(id);
+		let resolvedId = typeof resolved == 'object' ? resolved && resolved.id : resolved;
+
+		console.log('CSS MODULE resolved', resolvedId);
+
+		file = resolvedId.replace(/\.js$/, '');
 
 		// Check if we're allowed to load this file
-		file = resolveFile(file, cwd, includeDirs);
+		file = resolveFile(file, cwd, aliases);
 
 		// We create a plugin container for each request to prevent asset referenceId clashes
 		const container = createPluginContainer(
 			[wmrPlugin({ hot: true }), sassPlugin(), wmrStylesPlugin({ cwd, hot: true, fullPath: true })],
 			{
 				cwd,
-				includeDirs,
+				aliases,
 				output: {
 					dir: out,
 					assetFileNames: '[name][extname]'
@@ -453,6 +464,8 @@ export const TRANSFORMS = {
 				}
 			}
 		);
+
+		console.log('CSS MODULE', resolvedId, file);
 
 		const result = (await container.load(file)) || (await fs.readFile(file, 'utf-8'));
 
@@ -477,7 +490,10 @@ export const TRANSFORMS = {
 	},
 
 	// Handles CSS Modules (the actual CSS)
-	async css({ id, path, file, cwd, out, res }) {
+	async css({ id, path, file, cwd, out, res, NonRollup }) {
+		const resolved = await NonRollup.resolveId(id);
+
+		console.log('PURE', resolved, path);
 		if (!/\.(css|s[ac]ss)$/.test(path)) throw null;
 
 		const isModular = /\.module\.(css|s[ac]ss)$/.test(path);
