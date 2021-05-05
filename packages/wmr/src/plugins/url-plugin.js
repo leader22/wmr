@@ -1,7 +1,7 @@
 import { basename } from 'path';
 import { promises as fs } from 'fs';
 import * as kl from 'kolorist';
-import { matchAlias } from '../wmr-middleware.js';
+import { matchAlias } from '../lib/aliasing.js';
 import { debug } from '../lib/output-utils.js';
 
 export const IMPLICIT_URL = /\.(?:png|jpe?g|gif|webp|svg|mp4|webm|ogg|mp3|wav|flac|aac|woff2?|eot|ttf|otf)$/i;

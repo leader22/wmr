@@ -231,6 +231,16 @@ describe('fixtures', () => {
 				expect(output).toMatch(/it works/);
 			});
 		});
+
+		it('should alias CSS', async () => {
+			await loadFixture('alias-css', env);
+			instance = await runWmrFast(env.tmp.path);
+			await withLog(instance.output, async () => {
+				await getOutput(env, instance);
+				const color = await env.page.$eval('h1', el => getComputedStyle(el).color);
+				expect(color).toBe('rgb(255, 218, 185)');
+			});
+		});
 	});
 
 	describe('rmwc', () => {
@@ -282,10 +292,11 @@ describe('fixtures', () => {
 	});
 
 	describe('CSS', () => {
-		it('should load referenced files via @import', async () => {
+		it.only('should load referenced files via @import', async () => {
 			await loadFixture('css-imports', env);
 			instance = await runWmrFast(env.tmp.path);
 			await getOutput(env, instance);
+			console.log(instance.output);
 			expect(await env.page.$eval('h1', el => getComputedStyle(el).color)).toBe('rgb(255, 0, 0)');
 		});
 
