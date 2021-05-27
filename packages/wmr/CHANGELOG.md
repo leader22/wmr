@@ -1,5 +1,13 @@
 # wmr
 
+## 2.2.1
+
+### Patch Changes
+
+- [`95da598`](https://github.com/preactjs/wmr/commit/95da598ecdd8f8e673b12993b174877cf0b4e727) [#643](https://github.com/preactjs/wmr/pull/643) Thanks [@developit](https://github.com/developit)! - Never copy `wmr.config.js` to output directory
+
+* [`7345e89`](https://github.com/preactjs/wmr/commit/7345e893e21c318738549e7d1c5fe92b30321afe) [#648](https://github.com/preactjs/wmr/pull/648) Thanks [@lukeed](https://github.com/lukeed)! - fix(compression): ensure all responses write headers
+
 ## 2.2.0
 
 ### Minor Changes
